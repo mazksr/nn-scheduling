@@ -50,8 +50,10 @@ func main() {
 }
 
 func (cfg *apiConfig) roundRobinHandler(w http.ResponseWriter, r *http.Request) {
+	var serverIndex int
+
 	cfg.mu.Lock()
-	serverIndex := cfg.roundRobinState
+	serverIndex = cfg.roundRobinState
 	if serverIndex >= cfg.numWorkers-1 {
 		cfg.roundRobinState = -1
 	}
