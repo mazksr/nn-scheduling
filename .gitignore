@@ -1,0 +1,89 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+*.egg
+*.log
+*.tmp
+*.bak
+
+# Virtual environments
+.venv/
+env/
+venv/
+
+# Python build artifacts
+build/
+dist/
+pip-wheel-metadata/
+*.spec
+
+vit-base-patch16-224/
+
+# ===== Go =====
+# Binaries and build cache
+/server/bin/
+*.exe
+*.out
+*.test
+*.log
+
+# Go workspace cache
+go.sum
+*.coverprofile
+
+# ===== Model / Large Artifacts =====
+# Hugging Face / Transformers caches and checkpoints
+*.safetensors
+*.h5
+*.msgpack
+*.bin
+*.pt
+*.ckpt
+*.onnx
+
+# You can optionally whitelist minimal model configs if needed:
+# !img-classifier/vit-base-patch16-224/config.json
+# !img-classifier/vit-base-patch16-224/preprocessor_config.json
+
+# ===== OS / Editor =====
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/
+*.code-workspace
+
+# ===== Logs / temp files =====
+*.log
+*.pid
+*.gz
+*.zip
+*.tar
+*.tar.gz
+*.bak
+*.tmp
+
+# ===== Custom for this repo =====
+# compiled vLLM versions or downloaded models
+/vllm/=*
+/vllm/models/
+/vllm/checkpoints/
+/vllm/cache/
+
+# Docker and runtime
+*.env
+*.dockerfile
+*.db
+*.sock
+
+# ===== Optional =====
+# If you store datasets or results locally
+data/
+outputs/
+results/
+runs/
+
