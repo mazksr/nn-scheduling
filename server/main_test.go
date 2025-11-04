@@ -15,7 +15,7 @@ func TestGetAndNext(t *testing.T) {
 	got := make([]int, len(want))
 
 	for i := range got {
-		got[i] = cfg.getAndNext()
+		got[i] = cfg.getRoundRobin()
 	}
 
 	for i := range want {
