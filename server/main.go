@@ -2,19 +2,26 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strconv"
 	"sync"
+
+	"github.com/joho/godotenv"
 )
 
 var workerURL string
+
+type inferStruct struct {
+	file []byte
+}
 
 type apiConfig struct {
 	numWorkers int
 	Servers []string
 	roundRobinState int
-	mu *sync.Mutex
+	mu sync.Mutex
 }
 
 func (cfg *apiConfig) initializeWorkers() {
@@ -24,6 +31,9 @@ func (cfg *apiConfig) initializeWorkers() {
 }
 
 func main() {
+	err := godotenv.Load()
+	if err != nil {fmt.Fprintf(os.Stderr, "Error loading environment: %v\n", err); os.Exit(1)}
+
 	mux := http.NewServeMux()
 
 	workerURL = os.Getenv("WORKER_URL")
@@ -35,7 +45,6 @@ func main() {
 
 	cfg := &apiConfig{
 		Servers: make([]string, numWorkers),
-		mu: &sync.Mutex{},
 		numWorkers: numWorkers,
 	}
 	cfg.initializeWorkers()
@@ -49,17 +58,53 @@ func main() {
 	server.ListenAndServe()
 }
 
-func (cfg *apiConfig) roundRobinHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) getRoundRobin() int {
 	var serverIndex int
 
-	cfg.mu.Lock()
-	serverIndex = cfg.roundRobinState
-	if serverIndex >= cfg.numWorkers-1 {
-		cfg.roundRobinState = -1
+	if cfg.numWorkers > 1 {
+		cfg.mu.Lock()
+		serverIndex = cfg.roundRobinState
+		if serverIndex >= cfg.numWorkers-1 {
+			cfg.roundRobinState = 0
+		} else {
+			cfg.roundRobinState += 1
+		}
+		cfg.mu.Unlock()
 	}
-	cfg.roundRobinState += 1
-	cfg.mu.Unlock()
 
-	fmt.Println(cfg.Servers[serverIndex])
+	return serverIndex
+}
 
+func (cfg *apiConfig) roundRobinHandler(w http.ResponseWriter, r *http.Request) {
+	serverIndex := cfg.getRoundRobin()
+	forward(w, r, cfg.Servers[serverIndex])
+}
+
+func forward(w http.ResponseWriter, r *http.Request, url string) {
+	request, err := http.NewRequest(r.Method, url, r.Body)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte{})
+		return
+	}
+	request.Header = r.Header.Clone()
+	request.Host = ""
+
+	client := &http.Client{}
+	res, err := client.Do(request)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte{})
+		return
+	}
+	defer res.Body.Close()
+
+	for key, val := range res.Header {
+		for _, v := range val {
+			w.Header().Add(key, v)
+		}
+	}
+
+	w.WriteHeader(res.StatusCode)
+	io.Copy(w, res.Body)
 }
