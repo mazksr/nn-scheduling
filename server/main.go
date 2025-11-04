@@ -38,7 +38,7 @@ func main() {
 
 	workerURL = os.Getenv("WORKER_URL")
 	numWorkers, err := strconv.Atoi(os.Getenv("NUM_WORKERS"))
-	if err != nil {
+	if err != nil || numWorkers < 1{
 		fmt.Println("error loading NUM_WORKERS")
 		return
 	}
@@ -70,6 +70,8 @@ func (cfg *apiConfig) getRoundRobin() int {
 			cfg.roundRobinState += 1
 		}
 		cfg.mu.Unlock()
+	} else {
+		serverIndex = 0
 	}
 
 	return serverIndex
