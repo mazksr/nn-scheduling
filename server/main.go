@@ -50,6 +50,7 @@ func main() {
 	cfg.initializeWorkers()
 
 	mux.HandleFunc("POST /infer", cfg.roundRobinHandler)
+	mux.HandleFunc("GET /health", healthHandler)
 
 	server := &http.Server {
 		Handler: mux,
@@ -75,6 +76,9 @@ func (cfg *apiConfig) getRoundRobin() int {
 	}
 
 	return serverIndex
+}
+
+func healthHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) roundRobinHandler(w http.ResponseWriter, r *http.Request) {
