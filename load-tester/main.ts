@@ -1,6 +1,4 @@
 import http from 'k6/http'
-import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/latest/dist/bundle.js'
-import { sleep } from 'k6';
 
 export const options = {
     // iterations: 10,
@@ -21,11 +19,10 @@ export default function () {
     };
 
     http.post("http://localhost:8080/infer", data)
-    sleep(1)
 }
 
 export function handleSummary(data) {
   return {
-    'summary.html': htmlReport(data),
+    'summary.json': JSON.stringify(data),
   }
 }
