@@ -4,6 +4,7 @@ import { sleep } from 'k6';
 
 export const options = {
     // iterations: 10,
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99.99)', 'count'],
     stages: [
         { duration: '40s', target: 100 },
         { duration: '80s', target: 200 },
