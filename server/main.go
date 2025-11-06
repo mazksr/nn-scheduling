@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"sync"
+	"sync/atomic"
 
 	"github.com/joho/godotenv"
 )
@@ -20,8 +21,8 @@ type inferStruct struct {
 type apiConfig struct {
 	numWorkers int
 	Servers []string
-	roundRobinState int
 	mu sync.Mutex
+	roundRobinWorker atomic.Uint64
 }
 
 func (cfg *apiConfig) initializeWorkers() {
@@ -61,22 +62,8 @@ func main() {
 }
 
 func (cfg *apiConfig) getRoundRobin() int {
-	var serverIndex int
-
-	if cfg.numWorkers > 1 {
-		cfg.mu.Lock()
-		serverIndex = cfg.roundRobinState
-		if serverIndex >= cfg.numWorkers-1 {
-			cfg.roundRobinState = 0
-		} else {
-			cfg.roundRobinState += 1
-		}
-		cfg.mu.Unlock()
-	} else {
-		serverIndex = 0
-	}
-
-	return serverIndex
+	i := cfg.roundRobinWorker.Add(1) - 1
+	return int(i) % cfg.numWorkers
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {}
