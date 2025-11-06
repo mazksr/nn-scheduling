@@ -1,8 +1,12 @@
 import http from 'k6/http'
 
 export const options = {
-    // iterations: 10,
+    // iterations: 50,
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99.99)', 'count'],
+    thresholds: {
+        http_req_duration: ['p(95)<1000'],
+    },
+
     stages: [
         { duration: '40s', target: 100 },
         { duration: '80s', target: 200 },
