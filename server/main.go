@@ -63,7 +63,7 @@ func main() {
 
 func (cfg *apiConfig) getRoundRobin() int {
 	i := cfg.roundRobinWorker.Add(1) - 1
-	return int(i) % cfg.numWorkers
+	return int(i % uint64(cfg.numWorkers))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {}
