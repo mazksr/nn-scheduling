@@ -12,8 +12,6 @@ __pycache__/
 # Node
 node_modules/
 
-# Test result html
-summary.html
 
 # Virtual environments
 .venv/
