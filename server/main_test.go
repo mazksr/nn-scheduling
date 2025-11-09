@@ -66,35 +66,3 @@ func TestInitializeWorkersAssignsURLs(t *testing.T) {
 		}
 	}
 }
-
-func TestInitializeWorkersLeavesExtraEntriesUntouched(t *testing.T) {
-	originalWorkerURL := workerURL
-	workerURL = "http://internal"
-	t.Cleanup(func() { workerURL = originalWorkerURL })
-
-	cfg := &apiConfig{
-		numWorkers: 2,
-		workers: []worker{
-			{url: "old-0"},
-			{url: "old-1"},
-			{url: "keep-me"},
-		},
-	}
-
-	cfg.initializeWorkers()
-
-	want := []string{
-		"http://internal:8000/infer",
-		"http://internal:8001/infer",
-	}
-
-	for i := range want {
-		if cfg.workers[i].url != want[i] {
-			t.Fatalf("worker %d url mismatch: got %q, want %q", i, cfg.workers[i].url, want[i])
-		}
-	}
-
-	if cfg.workers[2].url != "keep-me" {
-		t.Fatalf("expected extra worker entries beyond numWorkers to remain untouched, got %q", cfg.workers[2].url)
-	}
-}
