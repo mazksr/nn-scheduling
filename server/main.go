@@ -6,13 +6,13 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"sync"
 	"sync/atomic"
 
 	"github.com/joho/godotenv"
 )
 
 var workerURL string
+var numWorkers int
 
 type inferStruct struct {
 	file []byte
@@ -20,14 +20,18 @@ type inferStruct struct {
 
 type apiConfig struct {
 	numWorkers int
-	Servers []string
-	mu sync.Mutex
+	workers []worker
 	roundRobinWorker atomic.Uint64
+}
+
+type worker struct {
+	url string
+	connCount atomic.Uint32
 }
 
 func (cfg *apiConfig) initializeWorkers() {
 	for i := range cfg.numWorkers {
-		cfg.Servers[i] = workerURL + ":800" + strconv.Itoa(i) + "/infer"
+		cfg.workers[i].url = workerURL + ":800" + strconv.Itoa(i) + "/infer"
 	}
 }
 
@@ -38,20 +42,22 @@ func main() {
 	mux := http.NewServeMux()
 
 	workerURL = os.Getenv("WORKER_URL")
-	numWorkers, err := strconv.Atoi(os.Getenv("NUM_WORKERS"))
+	workerEnv, err := strconv.Atoi(os.Getenv("NUM_WORKERS"))
 	if err != nil || numWorkers < 1{
 		fmt.Println("error loading NUM_WORKERS")
 		return
 	}
+	numWorkers = workerEnv
 
 	cfg := &apiConfig{
-		Servers: make([]string, numWorkers),
+		workers: make([]worker, numWorkers),
 		numWorkers: numWorkers,
 	}
 	cfg.initializeWorkers()
 
 	mux.HandleFunc("POST /infer-rr", cfg.roundRobinHandler)
 	mux.HandleFunc("POST /infer-single", cfg.singleWorkerHandler)
+	mux.HandleFunc("POST /infer-", cfg.singleWorkerHandler)
 	mux.HandleFunc("GET /health", healthHandler)
 
 	server := &http.Server {
@@ -69,12 +75,12 @@ func (cfg *apiConfig) getRoundRobin() int {
 func healthHandler(w http.ResponseWriter, r *http.Request) {}
 
 func (cfg *apiConfig) singleWorkerHandler(w http.ResponseWriter, r *http.Request) {
-	forward(w, r, cfg.Servers[0])
+	forward(w, r, cfg.workers[0].url)
 }
 
 func (cfg *apiConfig) roundRobinHandler(w http.ResponseWriter, r *http.Request) {
 	serverIndex := cfg.getRoundRobin()
-	forward(w, r, cfg.Servers[serverIndex])
+	forward(w, r, cfg.workers[serverIndex].url)
 }
 
 func forward(w http.ResponseWriter, r *http.Request, url string) {
