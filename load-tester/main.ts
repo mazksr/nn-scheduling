@@ -1,9 +1,9 @@
 import http from 'k6/http'
+import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/latest/dist/bundle.js'
 
 export const options = {
     // iterations: 50,
 
-    // summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99.99)', 'count'],
     // thresholds: {
     //     http_req_duration: ['p(95)<1000'],
     // },
@@ -14,6 +14,8 @@ export const options = {
     //     { duration: '1m', target: 250 },
     //     { duration: '1.5m', target: 0 },
     // ],
+    //
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99.99)', 'count'],
 
     scenarios: {
         contacts: {
@@ -27,7 +29,7 @@ export const options = {
 
             // Pre-allocate necessary VUs.
             preAllocatedVUs: 100,
-            maxVUs: 500,
+            maxVUs: 600,
 
             stages: [
                 { target: 20, duration: '30s' },
@@ -55,8 +57,9 @@ export default function () {
     http.post("http://localhost:8080/"+ALGORITHM, data)
 }
 
-// export function handleSummary(data) {
-//   return {
-//     'summary.json': JSON.stringify(data),
-//   }
-// }
+export function handleSummary(data) {
+    return {
+        'summary.html': htmlReport(data),
+        'summary.json': JSON.stringify(data),
+    }
+}
