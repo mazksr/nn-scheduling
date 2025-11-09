@@ -27,7 +27,7 @@ export const options = {
 
             // Pre-allocate necessary VUs.
             preAllocatedVUs: 100,
-            maxVUs: 300,
+            maxVUs: 500,
 
             stages: [
                 { target: 20, duration: '30s' },
@@ -45,13 +45,14 @@ export const options = {
 }
 
 const file = open("/home/mazksr/Downloads/wifi.webp", "b")
+const ALGORITHM = __ENV.ALG || ""
 
 export default function () {
     const data = {
         file: http.file(file)
     };
 
-    http.post("http://localhost:8080/infer-single", data)
+    http.post("http://localhost:8080/"+ALGORITHM, data)
 }
 
 // export function handleSummary(data) {
