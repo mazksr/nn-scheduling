@@ -2,7 +2,14 @@ import torch
 from fastapi import FastAPI, File, UploadFile
 from transformers import ViTImageProcessor, ViTForImageClassification
 from PIL import Image
-import io, uvicorn, argparse
+import io
+import uvicorn
+import argparse
+from contextlib import asynccontextmanager
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor(max_workers=4)
 
 # =====================================================
 # CLI arguments
@@ -16,16 +23,30 @@ args = parser.parse_args()
 # =====================================================
 MODEL_DIR = "./vit-base-patch16-224"
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 print(f"Loading model from {MODEL_DIR} on {DEVICE}...")
 processor = ViTImageProcessor.from_pretrained(MODEL_DIR)
 model = ViTForImageClassification.from_pretrained(MODEL_DIR)
 model.eval().to(DEVICE)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    asyncio.get_event_loop().set_default_executor(executor)
+    yield
+
 # =====================================================
 # FastAPI app
 # =====================================================
-app = FastAPI(title="ViT Image Classification API")
+app = FastAPI(lifespan=lifespan, title="ViT Image Classification API")
+
+def run_inference(image_bytes: bytes):
+    img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
+    inputs = processor(images=img, return_tensors="pt").to(DEVICE)
+    with torch.inference_mode():
+        outputs = model(**inputs)
+        logits = outputs.logits
+        pred_idx = int(logits.argmax(-1))
+        label = model.config.id2label[pred_idx]
+    return {"class": label, "index": pred_idx}
 
 @app.post("/infer")
 async def infer(file: UploadFile = File(...)):
@@ -34,17 +55,8 @@ async def infer(file: UploadFile = File(...)):
     and returns the predicted ImageNet class in JSON.
     """
     image_bytes = await file.read()
-    image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-
-    inputs = processor(images=image, return_tensors="pt").to(DEVICE)
-
-    with torch.no_grad():
-        outputs = model(**inputs)
-        logits = outputs.logits
-        pred_idx = logits.argmax(-1).item()
-        label = model.config.id2label[pred_idx]
-
-    return {"predicted_class": label, "class_index": pred_idx}
+    result = await asyncio.to_thread(run_inference, image_bytes)
+    return result
 
 # =====================================================
 # Entry point

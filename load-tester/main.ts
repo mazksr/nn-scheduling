@@ -46,7 +46,7 @@ export const options = {
     },
 }
 
-const file = open("/home/mazksr/Downloads/wifi.webp", "b")
+const file = open("/home/mazksr/Walls/beach.png", "b")
 const ALGORITHM = __ENV.ALG || ""
 
 export default function () {

@@ -18,8 +18,8 @@ for i in "${!algorithms[@]}"; do
 
   # Wait 30s between tests (skip after the last one)
   if [[ "$i" -lt $((${#algorithms[@]} - 1)) ]]; then
-    echo "==> Waiting 30s before next test..."
-    sleep 30
+    echo "==> Waiting 60s before next test..."
+    sleep 60
   fi
 done
 

@@ -81,6 +81,7 @@ func (cfg *apiConfig) getLeastConnection() int {
 
 func (cfg *apiConfig) leastConnHandler(w http.ResponseWriter, r *http.Request) {
 	least := cfg.getLeastConnection()
+	// log.Println(least)
 
 	cfg.workers[least].connCount.Add(1)
 	res, err := makeInference(r, cfg.workers[least].url)
