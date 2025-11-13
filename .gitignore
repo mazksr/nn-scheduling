@@ -12,6 +12,8 @@ __pycache__/
 # Node
 node_modules/
 
+# Too Big
+*.csv
 
 # Virtual environments
 .venv/
