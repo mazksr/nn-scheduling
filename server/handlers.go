@@ -1,6 +1,9 @@
 package main
 
-import "net/http"
+import (
+	"net/http"
+	"strings"
+)
 
 func (cfg *apiConfig) singleWorkerHandler(w http.ResponseWriter, r *http.Request) {
 	err := forward(w, r, cfg.workers[0].url)
@@ -35,5 +38,11 @@ func (cfg *apiConfig) leastConnHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "", http.StatusInternalServerError)
 	}
 }
+
+func (cfg *apiConfig) inferenceRegHandler(_ http.ResponseWriter, r *http.Request) {
+	clientAddress := strings.Split(r.RemoteAddr, ":")[0]
+	cfg.registerWorker(clientAddress)
+}
+
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {}

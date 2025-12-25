@@ -1,11 +1,12 @@
 package main
 
 import (
+	"strconv"
 	"testing"
 )
 
 func TestGetAndNext(t *testing.T) {
-	numWorkers = 3
+	numWorkers := 3
 	cfg := &apiConfig{
 		workers: make([]worker, numWorkers),
 	}
@@ -40,30 +41,6 @@ func TestGetAndNext(t *testing.T) {
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("4-worker case: at index %d: got %d, want %d", i, got[i], want[i])
-		}
-	}
-}
-
-func TestInitializeWorkersAssignsURLs(t *testing.T) {
-	originalWorkerURL := workerURL
-	workerURL = "http://example.com"
-	t.Cleanup(func() { workerURL = originalWorkerURL })
-
-	cfg := &apiConfig{
-		workers: make([]worker, 3),
-	}
-	numWorkers = 3
-	cfg.initializeWorkers()
-
-	want := []string{
-		"http://example.com:8000/infer",
-		"http://example.com:8001/infer",
-		"http://example.com:8002/infer",
-	}
-
-	for i := range want {
-		if cfg.workers[i].url != want[i] {
-			t.Fatalf("worker %d url mismatch: got %q, want %q", i, cfg.workers[i].url, want[i])
 		}
 	}
 }
@@ -121,11 +98,13 @@ func TestGetLeastConnection(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			numWorkers = len(tc.counts)
+			numWorkers := len(tc.counts)
 			cfg := &apiConfig{
 				workers: mkWorkers(tc.counts),
 			}
-			cfg.initializeWorkers()
+			for i := range numWorkers {
+				cfg.workers[i].url = "http://localhost:800" + strconv.Itoa(i) + "/infer"
+			}
 
 			got := cfg.getLeastConnection()
 			if got != tc.want {

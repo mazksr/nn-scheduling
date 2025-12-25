@@ -15,6 +15,7 @@ func main() {
 	mux.HandleFunc("POST /infer-rr", cfg.roundRobinHandler)
 	mux.HandleFunc("POST /infer-single", cfg.singleWorkerHandler)
 	mux.HandleFunc("POST /infer-leastconn", cfg.leastConnHandler)
+	mux.HandleFunc("POST /reg-worker", cfg.inferenceRegHandler)
 	mux.HandleFunc("GET /health", healthHandler)
 
 	server := &http.Server {

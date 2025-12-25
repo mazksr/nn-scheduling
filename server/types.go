@@ -1,7 +1,6 @@
 package main
 
 import (
-	"strconv"
 	"sync"
 	"sync/atomic"
 )
@@ -9,7 +8,7 @@ import (
 type apiConfig struct {
 	workers []worker
 	roundRobinWorker atomic.Uint64
-	mu sync.Mutex
+	mu sync.RWMutex
 }
 
 type worker struct {
@@ -17,16 +16,20 @@ type worker struct {
 	connCount atomic.Int32
 }
 
-func (cfg *apiConfig) initializeWorkers() {
-	for i := range numWorkers {
-		cfg.workers[i].url = workerURL + ":800" + strconv.Itoa(i) + "/infer"
-	}
+func (cfg *apiConfig) registerWorker(addr string) {
+	cfg.mu.Lock()
+	defer cfg.mu.Unlock()
+	cfg.workers = append(cfg.workers, worker {
+		url: "http://"+addr+":"+workerPort,
+		})
 }
 
 func (cfg *apiConfig) getLeastConnection() int {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
 	least := cfg.workers[0].connCount.Load()
 	leastPos := 0
-	for i := 1; i < numWorkers; i++ {
+	for i := 1; i < len(cfg.workers); i++ {
 		val := cfg.workers[i].connCount.Load()
 		if val < least {
 			least = val
@@ -39,5 +42,5 @@ func (cfg *apiConfig) getLeastConnection() int {
 
 func (cfg *apiConfig) getRoundRobin() int {
 	i := cfg.roundRobinWorker.Add(1) - 1
-	return int(i % uint64(numWorkers))
+	return int(i % uint64(len(cfg.workers)))
 }

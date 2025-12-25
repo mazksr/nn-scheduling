@@ -27,6 +27,7 @@ pip-wheel-metadata/
 *.spec
 
 vit-base-patch16-224/
+huggingface-cache/
 
 # ===== Go =====
 # Binaries and build cache
