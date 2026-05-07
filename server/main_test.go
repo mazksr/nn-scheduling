@@ -16,7 +16,11 @@ func TestGetAndNext(t *testing.T) {
 	got := make([]int, len(want))
 
 	for i := range got {
-		got[i] = cfg.getRoundRobin()
+		val, err := cfg.getRoundRobin()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got[i] = val
 	}
 
 	for i := range want {
@@ -35,7 +39,11 @@ func TestGetAndNext(t *testing.T) {
 	got = make([]int, len(want))
 
 	for i := range got {
-		got[i] = cfg.getRoundRobin()
+		val, err := cfg.getRoundRobin()
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		got[i] = val
 	}
 
 	for i := range want {
@@ -106,7 +114,10 @@ func TestGetLeastConnection(t *testing.T) {
 				cfg.workers[i].url = "http://localhost:800" + strconv.Itoa(i) + "/infer"
 			}
 
-			got := cfg.getLeastConnection()
+			got, err := cfg.getLeastConnection()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
 			if got != tc.want {
 				t.Fatalf("updateLeastConnection() = %d, want %d (counts=%v)", got, tc.want, tc.counts)
 			}

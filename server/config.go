@@ -11,7 +11,7 @@ var workerPort string
 
 func initConfig() *apiConfig {
 	cfg := &apiConfig{
-		workers: make([]worker, 4),
+		workers: make([]worker, 0),
 	}
 
 	return cfg
