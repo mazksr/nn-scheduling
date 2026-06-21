@@ -64,12 +64,14 @@ def percentile(a: np.ndarray, q: float) -> float:
 
 
 def aggregate_latency(df: pd.DataFrame) -> pd.DataFrame:
-    # Per-second p95 & avg for http_req_duration (ms)
-    sub = df.loc[df["metric_name"] == "http_req_duration", ["dt", "metric_value"]].copy()
+    # Per-second p95, p99, max & avg for http_req_waiting (ms)
+    sub = df.loc[df["metric_name"] == "http_req_waiting", ["dt", "metric_value"]].copy()
     grouped = sub.groupby("dt")
     lat = pd.DataFrame({
         "dt": grouped.size().index,
         "p95_ms": grouped["metric_value"].apply(lambda s: percentile(s.to_numpy(), 95.0)).values,
+        "p99_ms": grouped["metric_value"].apply(lambda s: percentile(s.to_numpy(), 99.0)).values,
+        "max_ms": grouped["metric_value"].max().values,
         "avg_ms": grouped["metric_value"].mean().values,
         "count": grouped.size().values,
     }).sort_values("dt")
@@ -95,6 +97,21 @@ def aggregate_failed_per_sec(df: pd.DataFrame) -> pd.DataFrame:
     return failed
 
 
+def aggregate_worker_requests(df: pd.DataFrame) -> dict:
+    # Find all unique worker metric names present in the dataframe
+    worker_metrics = [m for m in df["metric_name"].unique() if m.endswith("_requests") and m.startswith("worker_")]
+
+    worker_data = {}
+    for metric in sorted(worker_metrics):
+        sub = df.loc[df["metric_name"] == metric, ["dt", "metric_value"]].copy()
+        # sum count of requests per second
+        grouped = sub.groupby("dt", as_index=False)["metric_value"].sum()
+        grouped = grouped.rename(columns={"metric_value": "count"}).sort_values("dt")
+        worker_data[metric] = grouped
+
+    return worker_data
+
+
 def plot_rps(rps: pd.DataFrame):
     plt.figure()
     plt.plot(rps["dt"], rps["rps"], marker="o", linewidth=1)
@@ -111,16 +128,18 @@ def plot_latency_with_failures(lat: pd.DataFrame, fails: pd.DataFrame):
     merged["failed_per_s"] = merged["failed_per_s"].fillna(0)
 
     fig, ax1 = plt.subplots()
-    ax1.plot(merged["dt"], merged["p95_ms"], label="p95", marker="o", linewidth=1)
     ax1.plot(merged["dt"], merged["avg_ms"], label="avg", marker="x", linewidth=1)
-    ax1.set_title("Latency over Time (http_req_duration) + Failed Requests")
+    ax1.plot(merged["dt"], merged["p95_ms"], label="p95", marker="o", linewidth=1)
+    ax1.plot(merged["dt"], merged["p99_ms"], label="p99", marker="^", linewidth=1)
+    ax1.plot(merged["dt"], merged["max_ms"], label="max", marker="s", linewidth=1)
+    ax1.set_title("Latency over Time (http_req_waiting) + Failed Requests")
     ax1.set_xlabel("Time (UTC)")
     ax1.set_ylabel("Latency (ms)")
     ax1.grid(True)
 
     # Secondary Y-axis for failures per second
     ax2 = ax1.twinx()
-    ax2.plot(merged["dt"], merged["failed_per_s"], label="failed/s", linestyle="--", linewidth=1)
+    ax2.plot(merged["dt"], merged["failed_per_s"], label="failed/s", linestyle="--", linewidth=1, color="red")
     ax2.set_ylabel("Failed requests per second")
 
     # Combined legend
@@ -129,6 +148,25 @@ def plot_latency_with_failures(lat: pd.DataFrame, fails: pd.DataFrame):
     ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
 
     fig.tight_layout()
+
+
+def plot_worker_distribution(worker_data: dict):
+    if not worker_data:
+        print("No worker request metrics found in CSV.")
+        return
+
+    plt.figure()
+    for metric_name, df_metric in worker_data.items():
+        # Clean name for legend, e.g., worker_1_requests -> Worker 1
+        label = metric_name.replace("_requests", "").replace("_", " ").title()
+        plt.plot(df_metric["dt"], df_metric["count"], marker="o", linewidth=1, label=label)
+
+    plt.title("Traffic Distribution per Worker (RPS)")
+    plt.xlabel("Time (UTC)")
+    plt.ylabel("Requests Per Second (RPS)")
+    plt.grid(True)
+    plt.legend(loc="best")
+    plt.tight_layout()
 
 
 def main():
@@ -140,6 +178,7 @@ def main():
     rps = aggregate_rps(df)
     lat = aggregate_latency(df)
     fails = aggregate_failed_per_sec(df)
+    worker_data = aggregate_worker_requests(df)
 
     if not rps.empty:
         plot_rps(rps)
@@ -147,13 +186,16 @@ def main():
         print("No http_reqs rows found; RPS plot will be empty.")
 
     if lat.empty:
-        print("No http_req_duration rows found; latency plot will be empty.")
+        print("No http_req_waiting rows found; latency plot will be empty.")
     else:
         plot_latency_with_failures(lat, fails)
+
+    plot_worker_distribution(worker_data)
 
     plt.show()
 
 
 if __name__ == "__main__":
     main()
+
 

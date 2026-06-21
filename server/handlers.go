@@ -1,61 +1,83 @@
 package main
 
 import (
+	"encoding/json"
+	"log"
+	"net"
 	"net/http"
-	"strings"
 )
 
 func (cfg *apiConfig) singleWorkerHandler(w http.ResponseWriter, r *http.Request) {
-	url, err := cfg.getSingleWorker()
+	wk, err := cfg.getSingleWorker()
 	if err != nil {
 		http.Error(w, "No workers available", http.StatusServiceUnavailable)
 		return
 	}
-	err = forward(w, r, url)
-	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+	w.Header().Set("X-Worker-Id", cfg.getWorkerID(wk.url))
+	if err = cfg.forward(w, r, wk.url); err != nil {
+		log.Printf("singleWorkerHandler: forward error: %v\n", err)
 	}
 }
 
 func (cfg *apiConfig) roundRobinHandler(w http.ResponseWriter, r *http.Request) {
-	serverIndex, err := cfg.getRoundRobin()
+	wk, err := cfg.getRoundRobin()
 	if err != nil {
 		http.Error(w, "No workers available", http.StatusServiceUnavailable)
 		return
 	}
-	err = forward(w, r, cfg.workers[serverIndex].url)
-	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+	w.Header().Set("X-Worker-Id", cfg.getWorkerID(wk.url))
+	if err = cfg.forward(w, r, wk.url); err != nil {
+		log.Printf("roundRobinHandler: forward error: %v\n", err)
 	}
 }
 
 func (cfg *apiConfig) leastConnHandler(w http.ResponseWriter, r *http.Request) {
-	least, err := cfg.getLeastConnection()
+	wk, err := cfg.getLeastConnection()
 	if err != nil {
 		http.Error(w, "No workers available", http.StatusServiceUnavailable)
 		return
 	}
 
-	cfg.workers[least].connCount.Add(1)
-	res, err := makeInference(r, cfg.workers[least].url)
-	defer cfg.workers[least].connCount.Add(-1)
+	// Increment before the request; decrement when handler exits.
+	// Safe even if the worker is evicted mid-flight because wk is a pointer.
+	wk.connCount.Add(1)
+	defer wk.connCount.Add(-1)
+
+	w.Header().Set("X-Worker-Id", cfg.getWorkerID(wk.url))
+
+	res, err := cfg.makeInference(r, wk.url)
 	if err != nil {
+		log.Printf("leastConnHandler: inference error: %v\n", err)
+		if isNetworkOrDialError(err) {
+			cfg.removeWorker(wk.url)
+		}
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
 	defer res.Body.Close()
 
-	err = sendResult(w, res)
-	if err != nil {
-		http.Error(w, "", http.StatusInternalServerError)
+	if err = sendResult(w, res); err != nil {
+		log.Printf("leastConnHandler: sendResult error: %v\n", err)
 	}
 }
 
 func (cfg *apiConfig) inferenceRegHandler(w http.ResponseWriter, r *http.Request) {
-	clientAddress := strings.Split(r.RemoteAddr, ":")[0]
+	if r.Header.Get("X-Registration-Secret") != cfg.registrationSecret {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	clientAddress, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		clientAddress = r.RemoteAddr
+	}
 	cfg.registerWorker(clientAddress)
+	log.Printf("[+] Registered worker from: %s\n", clientAddress)
 	w.WriteHeader(http.StatusOK)
 }
 
-
-func healthHandler(w http.ResponseWriter, r *http.Request) {}
+func healthHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}

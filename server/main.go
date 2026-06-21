@@ -3,12 +3,13 @@ package main
 import (
 	"log"
 	"net/http"
+	"time"
 )
 
 func main() {
-	initEnv()
-
 	cfg := initConfig()
+	initEnv(cfg)
+	cfg.startHealthChecks(15 * time.Second)
 
 	mux := http.NewServeMux()
 
@@ -18,9 +19,9 @@ func main() {
 	mux.HandleFunc("POST /reg-worker", cfg.inferenceRegHandler)
 	mux.HandleFunc("GET /health", healthHandler)
 
-	server := &http.Server {
+	server := &http.Server{
 		Handler: mux,
-		Addr: ":8080",
+		Addr:    ":8080",
 	}
 
 	if err := server.ListenAndServe(); err != nil {

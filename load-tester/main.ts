@@ -1,21 +1,13 @@
 import http from 'k6/http'
+import { Counter } from 'k6/metrics'
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/latest/dist/bundle.js'
 
 export const options = {
-    // iterations: 50,
+    thresholds: {
+        http_req_failed: ['rate<0.05'], // Less than 5% failure rate
+    },
 
-    // thresholds: {
-    //     http_req_duration: ['p(95)<1000'],
-    // },
-    //
-    // stages: [
-    //     { duration: '40s', target: 100 },
-    //     { duration: '80s', target: 200 },
-    //     { duration: '1m', target: 250 },
-    //     { duration: '1.5m', target: 0 },
-    // ],
-    //
-    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99.99)', 'count'],
+    summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)', 'p(99.99)', 'count'],
 
     scenarios: {
         contacts: {
@@ -46,6 +38,18 @@ export const options = {
     },
 }
 
+const workerCounters: { [key: string]: Counter } = {
+    'worker_1': new Counter('worker_1_requests'),
+    'worker_2': new Counter('worker_2_requests'),
+    'worker_3': new Counter('worker_3_requests'),
+    'worker_4': new Counter('worker_4_requests'),
+    'worker_5': new Counter('worker_5_requests'),
+    'worker_6': new Counter('worker_6_requests'),
+    'worker_7': new Counter('worker_7_requests'),
+    'worker_8': new Counter('worker_8_requests'),
+    'unknown': new Counter('worker_unknown_requests'),
+}
+
 const file = open("/home/mazksr/Walls/beach.png", "b")
 const ALGORITHM = __ENV.ALG || ""
 
@@ -54,7 +58,11 @@ export default function () {
         file: http.file(file)
     };
 
-    http.post("http://localhost:8080/"+ALGORITHM, data)
+    const res = http.post("http://localhost:8080/"+ALGORITHM, data)
+
+    const workerId = res.headers['X-Worker-Id'] || res.headers['x-worker-id'] || 'unknown';
+    const counter = workerCounters[workerId] || workerCounters['unknown'];
+    counter.add(1);
 }
 
 export function handleSummary(data) {

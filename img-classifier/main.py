@@ -38,6 +38,13 @@ async def lifespan(app: FastAPI):
 # =====================================================
 app = FastAPI(lifespan=lifespan, title="ViT Image Classification API")
 
+@app.get("/health")
+async def health():
+    """
+    Health check endpoint for the scheduler.
+    """
+    return {"status": "ok"}
+
 def run_inference(image_bytes: bytes):
     img = Image.open(io.BytesIO(image_bytes)).convert("RGB")
     inputs = processor(images=img, return_tensors="pt").to(DEVICE)

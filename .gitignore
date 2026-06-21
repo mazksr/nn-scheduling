@@ -32,6 +32,9 @@ huggingface-cache/
 # ===== Go =====
 # Binaries and build cache
 /server/bin/
+/server/server
+/server/server_bin
+/discovery/discovery_client
 *.exe
 *.out
 *.test

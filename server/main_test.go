@@ -1,126 +1,124 @@
 package main
 
 import (
-	"strconv"
+	"fmt"
+	"net/http"
 	"testing"
+	"time"
 )
 
-func TestGetAndNext(t *testing.T) {
-	numWorkers := 3
+// mkConfig builds an apiConfig populated with the given URLs.
+func mkConfig(urls []string) *apiConfig {
 	cfg := &apiConfig{
-		workers: make([]worker, numWorkers),
+		workers:    make([]*worker, len(urls)),
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
+	for i, u := range urls {
+		cfg.workers[i] = &worker{url: u}
+	}
+	return cfg
+}
 
-	// Expected sequence: 0,1,2,0,1,2,...
-	want := []int{0, 1, 2, 0, 1, 2}
-	got := make([]int, len(want))
+func TestGetRoundRobin(t *testing.T) {
+	urls3 := []string{"http://a", "http://b", "http://c"}
+	cfg3 := mkConfig(urls3)
 
-	for i := range got {
-		val, err := cfg.getRoundRobin()
+	// Expected sequence: a, b, c, a, b, c
+	want3 := []string{"http://a", "http://b", "http://c", "http://a", "http://b", "http://c"}
+	for i, want := range want3 {
+		wk, err := cfg3.getRoundRobin()
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("3-worker case: unexpected error at index %d: %v", i, err)
 		}
-		got[i] = val
-	}
-
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("3-worker case: at index %d: got %d, want %d", i, got[i], want[i])
+		if wk.url != want {
+			t.Fatalf("3-worker case: at index %d: got %q, want %q", i, wk.url, want)
 		}
 	}
 
-
-	numWorkers = 4
-	cfg = &apiConfig{
-		workers: make([]worker, numWorkers),
-	}
-
-	want = []int{0, 1, 2, 3, 0, 1, 2, 3}
-	got = make([]int, len(want))
-
-	for i := range got {
-		val, err := cfg.getRoundRobin()
+	urls4 := []string{"http://a", "http://b", "http://c", "http://d"}
+	cfg4 := mkConfig(urls4)
+	want4 := []string{"http://a", "http://b", "http://c", "http://d",
+		"http://a", "http://b", "http://c", "http://d"}
+	for i, want := range want4 {
+		wk, err := cfg4.getRoundRobin()
 		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
+			t.Fatalf("4-worker case: unexpected error at index %d: %v", i, err)
 		}
-		got[i] = val
-	}
-
-	for i := range want {
-		if got[i] != want[i] {
-			t.Fatalf("4-worker case: at index %d: got %d, want %d", i, got[i], want[i])
+		if wk.url != want {
+			t.Fatalf("4-worker case: at index %d: got %q, want %q", i, wk.url, want)
 		}
 	}
 }
 
-func mkWorkers(counts []int32) []worker {
-	ws := make([]worker, len(counts))
-	for i, v := range counts {
-		ws[i].connCount.Store(v)
+// mkConfigWithCounts builds an apiConfig with workers pre-seeded with connection counts.
+func mkConfigWithCounts(counts []int32) *apiConfig {
+	cfg := &apiConfig{
+		workers:    make([]*worker, len(counts)),
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
-	return ws
+	for i, v := range counts {
+		w := &worker{url: fmt.Sprintf("http://localhost:800%d/infer", i)}
+		w.connCount.Store(v)
+		cfg.workers[i] = w
+	}
+	return cfg
 }
 
 func TestGetLeastConnection(t *testing.T) {
 	tests := []struct {
 		name   string
 		counts []int32
-		want   int
+		want   int // index of expected winning worker
 	}{
-		{
-			name:   "single worker",
-			counts: []int32{3},
-			want:   0,
-		},
-		{
-			name:   "strictly decreasing",
-			counts: []int32{5, 4, 3, 2, 1},
-			want:   4,
-		},
-		{
-			name:   "strictly increasing",
-			counts: []int32{1, 2, 3, 4},
-			want:   0,
-		},
-		{
-			name:   "middle is minimum",
-			counts: []int32{5, 2, 7, 3},
-			want:   1,
-		},
-		{
-			name:   "tie picks first minimum",
-			counts: []int32{5, 2, 2, 3},
-			want:   1,
-		},
-		{
-			name:   "all equal",
-			counts: []int32{2, 2, 2},
-			want:   0,
-		},
-		{
-			name:   "last is unique minimum",
-			counts: []int32{6, 6, 6, 1},
-			want:   3,
-		},
+		{name: "single worker", counts: []int32{3}, want: 0},
+		{name: "strictly decreasing", counts: []int32{5, 4, 3, 2, 1}, want: 4},
+		{name: "strictly increasing", counts: []int32{1, 2, 3, 4}, want: 0},
+		{name: "middle is minimum", counts: []int32{5, 2, 7, 3}, want: 1},
+		{name: "tie picks first minimum", counts: []int32{5, 2, 2, 3}, want: 1},
+		{name: "all equal", counts: []int32{2, 2, 2}, want: 0},
+		{name: "last is unique minimum", counts: []int32{6, 6, 6, 1}, want: 3},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			numWorkers := len(tc.counts)
-			cfg := &apiConfig{
-				workers: mkWorkers(tc.counts),
-			}
-			for i := range numWorkers {
-				cfg.workers[i].url = "http://localhost:800" + strconv.Itoa(i) + "/infer"
-			}
+			cfg := mkConfigWithCounts(tc.counts)
+			wantURL := cfg.workers[tc.want].url
 
 			got, err := cfg.getLeastConnection()
 			if err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
-			if got != tc.want {
-				t.Fatalf("updateLeastConnection() = %d, want %d (counts=%v)", got, tc.want, tc.counts)
+			if got.url != wantURL {
+				t.Fatalf("getLeastConnection() = %q, want %q (counts=%v)", got.url, wantURL, tc.counts)
 			}
 		})
 	}
 }
+
+func TestMakeInferenceWorkerEviction(t *testing.T) {
+	// Create a worker that points to an unreachable port
+	cfg := &apiConfig{
+		workers:    []*worker{{url: "http://127.0.0.1:54321"}},
+		httpClient: &http.Client{Timeout: 100 * time.Millisecond}, // fast timeout for test
+	}
+
+	req, err := http.NewRequest("POST", "http://localhost:8080/infer-rr", nil)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+
+	// This should fail because nothing is listening on port 54321,
+	// and because it's a network dial error, the worker should be evicted.
+	_, err = cfg.makeInference(req, cfg.workers[0].url)
+	if err == nil {
+		t.Fatal("expected error from makeInference to unreachable worker, got nil")
+	}
+
+	// Verify the worker was evicted from the configuration
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+	if len(cfg.workers) != 0 {
+		t.Fatalf("expected worker to be evicted, but still have %d workers", len(cfg.workers))
+	}
+}
+

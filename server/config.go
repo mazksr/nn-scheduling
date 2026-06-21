@@ -2,28 +2,34 @@ package main
 
 import (
 	"log"
+	"net/http"
 	"os"
+	"time"
 
 	"github.com/joho/godotenv"
 )
 
-var workerPort string
-
 func initConfig() *apiConfig {
-	cfg := &apiConfig{
-		workers: make([]worker, 0),
+	return &apiConfig{
+		workers:    make([]*worker, 0),
+		httpClient: &http.Client{Timeout: 30 * time.Second},
 	}
-
-	return cfg
 }
 
-func initEnv() {
-	err := godotenv.Load()
-	if err != nil {log.Fatalf("Error loading environment: %v\n", err)}
+func initEnv(cfg *apiConfig) {
+	if err := godotenv.Load(); err != nil {
+		log.Fatalf("Error loading environment: %v\n", err)
+	}
 
-	workerPortEnv := os.Getenv("WORKERS_PORT")
-	if workerPortEnv == "" {
+	workerPort := os.Getenv("WORKERS_PORT")
+	if workerPort == "" {
 		log.Fatalln("error loading WORKERS_PORT from .env")
 	}
-	workerPort = workerPortEnv
+	cfg.workerPort = workerPort
+
+	secret := os.Getenv("REGISTRATION_SECRET")
+	if secret == "" {
+		log.Fatalln("error loading REGISTRATION_SECRET from .env")
+	}
+	cfg.registrationSecret = secret
 }
