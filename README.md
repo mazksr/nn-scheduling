@@ -69,12 +69,29 @@ REGISTRATION_SECRET=change-me-before-deploying
 ```
 
 ### Step 2: Start the Go Load Balancer
-Compile and start the central proxy:
+You can compile and start the central proxy locally or run it inside a Docker container:
+
+#### Option A: Local Go Binary
 ```bash
 cd server
 go run .
 ```
-The server will start listening on port `8080` and wait for workers to register.
+The server will start listening on port `8080` and wait for workers to register. Make sure a `.env` file exists in the directory or set the environment variables manually.
+
+#### Option B: Containerized Go Server (Docker)
+Build and run the load balancer inside a Docker container. In this setup, configuration is done via environment variables:
+```bash
+# Build the image using the server folder as context
+docker build -t nn-schd-server:latest -f server/Dockerfile server
+
+# Start the container with configuration environment variables
+docker run -d \
+  -p 8080:8080 \
+  -e WORKERS_PORT=8000 \
+  -e REGISTRATION_SECRET=change-me-before-deploying \
+  --name nn-server \
+  nn-schd-server:latest
+```
 
 ### Step 3: Start the Inference Workers
 You can run the workers locally on your machine or inside containerized environments:

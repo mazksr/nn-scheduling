@@ -2,7 +2,7 @@
 #   docker build -t img-classifier-client -f img-classifier/Dockerfile .
 
 # Stage 1: Build the discovery client
-FROM golang:1.23-alpine AS builder
+FROM golang:1.26.4-alpine AS builder
 WORKDIR /app
 COPY discovery/go.mod discovery/go.sum ./
 RUN go mod download
@@ -22,15 +22,15 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1
 
 # Copy dependency configuration files
-COPY img-classifier/pyproject.toml img-classifier/uv.lock ./
+COPY pyproject.toml uv.lock ./
 
 # Install dependencies (using uv sync)
 RUN uv sync --frozen --no-install-project --no-dev
 
 # Copy the application source code
-COPY img-classifier/main.py ./
-COPY img-classifier/vit-base-patch16-224 ./vit-base-patch16-224
-COPY img-classifier/entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY main.py ./
+COPY vit-base-patch16-224 ./vit-base-patch16-224
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
