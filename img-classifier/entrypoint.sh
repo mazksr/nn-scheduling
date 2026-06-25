@@ -6,4 +6,4 @@ set -e
 /usr/local/bin/discovery_client &
 
 # Start the FastAPI inference server using uv run
-exec uv run uvicorn main:app --host 0.0.0.0 --port "${PORT:-8000}"
+exec uv run main.py --port "${PORT:-8000}"

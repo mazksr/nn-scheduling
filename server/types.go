@@ -25,20 +25,23 @@ type apiConfig struct {
 type worker struct {
 	url       string
 	connCount atomic.Int32
+	evicted   chan struct{}
 }
 
-func (cfg *apiConfig) registerWorker(addr string) {
+func (cfg *apiConfig) registerWorker(addr string) *worker {
 	cfg.mu.Lock()
 	defer cfg.mu.Unlock()
 
 	url := fmt.Sprintf("http://%s:%s", addr, cfg.workerPort)
 	for _, w := range cfg.workers {
 		if w.url == url {
-			return
+			return w
 		}
 	}
 
-	cfg.workers = append(cfg.workers, &worker{url: url})
+	w := &worker{url: url, evicted: make(chan struct{})}
+	cfg.workers = append(cfg.workers, w)
+	return w
 }
 
 func (cfg *apiConfig) removeWorker(url string) {
@@ -47,6 +50,7 @@ func (cfg *apiConfig) removeWorker(url string) {
 
 	for i, w := range cfg.workers {
 		if w.url == url {
+			close(w.evicted)
 			cfg.workers = append(cfg.workers[:i], cfg.workers[i+1:]...)
 			log.Printf("[-] Removed dead worker: %s\n", url)
 			return

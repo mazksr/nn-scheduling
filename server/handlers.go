@@ -48,9 +48,6 @@ func (cfg *apiConfig) leastConnHandler(w http.ResponseWriter, r *http.Request) {
 	res, err := cfg.makeInference(r, wk.url)
 	if err != nil {
 		log.Printf("leastConnHandler: inference error: %v\n", err)
-		if isNetworkOrDialError(err) {
-			cfg.removeWorker(wk.url)
-		}
 		http.Error(w, "", http.StatusInternalServerError)
 		return
 	}
@@ -71,9 +68,23 @@ func (cfg *apiConfig) inferenceRegHandler(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		clientAddress = r.RemoteAddr
 	}
-	cfg.registerWorker(clientAddress)
+	wk := cfg.registerWorker(clientAddress)
 	log.Printf("[+] Registered worker from: %s\n", clientAddress)
+	
 	w.WriteHeader(http.StatusOK)
+	if flusher, ok := w.(http.Flusher); ok {
+		flusher.Flush()
+	}
+
+	select {
+	case <-wk.evicted:
+		// Worker was evicted by the scheduler
+		log.Printf("[-] Worker %s evicted, closing registration connection.\n", clientAddress)
+	case <-r.Context().Done():
+		// Discovery agent disconnected
+		log.Printf("[-] Discovery agent for %s disconnected, evicting worker.\n", clientAddress)
+		cfg.removeWorker(wk.url)
+	}
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {

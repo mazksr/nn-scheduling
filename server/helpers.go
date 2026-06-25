@@ -46,9 +46,6 @@ func (cfg *apiConfig) makeInference(r *http.Request, url string) (*http.Response
 
 	res, err := cfg.httpClient.Do(req)
 	if err != nil {
-		if isNetworkOrDialError(err) {
-			cfg.removeWorker(url)
-		}
 		return nil, err
 	}
 	return res, nil

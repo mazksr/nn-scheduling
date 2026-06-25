@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -49,9 +50,12 @@ func main() {
 			fmt.Printf("[-] Registration failed: %v. Retrying in %v...\n", err, retryInterval)
 		} else {
 			if resp.StatusCode == http.StatusOK {
-				fmt.Printf("[+] Successfully registered with scheduler.\n")
+				fmt.Printf("[+] Successfully registered with scheduler. Waiting for eviction...\n")
+				// Block until the server closes the connection (evicts the worker)
+				_, _ = io.ReadAll(resp.Body)
 				resp.Body.Close()
-				return
+				fmt.Printf("[-] Connection to scheduler closed (evicted). Re-registering...\n")
+				continue
 			}
 			fmt.Printf("[-] Scheduler returned status: %s. Retrying in %v...\n", resp.Status, retryInterval)
 			resp.Body.Close()
