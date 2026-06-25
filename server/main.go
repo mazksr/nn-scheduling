@@ -24,6 +24,7 @@ func main() {
 		Addr:    ":8080",
 	}
 
+	log.Println("Server Running at Port 8080")
 	if err := server.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed: %v\n", err)
 	}
