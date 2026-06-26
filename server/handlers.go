@@ -72,6 +72,7 @@ func (cfg *apiConfig) inferenceRegHandler(w http.ResponseWriter, r *http.Request
 	log.Printf("[+] Registered worker from: %s\n", clientAddress)
 	
 	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(" ")) // Force chunked encoding so the client blocks
 	if flusher, ok := w.(http.Flusher); ok {
 		flusher.Flush()
 	}
