@@ -2,11 +2,22 @@
 set -euo pipefail
 
 # Algorithms to test
-algorithms=( "infer-rr" "infer-leastconn" )
+algorithms=( "infer-rr" "infer-leastconn" "infer-p2c" )
 
 # Optional: directory for CSV outputs (created if missing)
 out_dir="./k6_csv/$(date +%Y-%m-%d_%H-%M-%S)"
 mkdir -p "$out_dir"
+
+# Generate images list for k6
+IMAGE_DIR="${IMAGE_DIR:-/home/mazksr/Walls}"
+echo "==> Finding images in ${IMAGE_DIR}..."
+find "$IMAGE_DIR" -type f \( -iname "*.jpg" -o -iname "*.png" -o -iname "*.jpeg" \) > images.txt
+
+if [ ! -s images.txt ]; then
+  echo "Error: No images found in ${IMAGE_DIR}"
+  exit 1
+fi
+echo "==> Found $(wc -l < images.txt) images."
 
 # Default Prometheus Remote Write URL
 export K6_PROMETHEUS_RW_SERVER_URL="${K6_PROMETHEUS_RW_SERVER_URL:-http://localhost:9090/api/v1/write}"

@@ -50,12 +50,23 @@ const workerCounters: { [key: string]: Counter } = {
     'unknown': new Counter('worker_unknown_requests'),
 }
 
-const file = open("/home/mazksr/Walls/beach.png", "b")
+const imageListText = open('./images.txt');
+const imagePaths = imageListText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+
+const imageFiles = imagePaths.map(filepath => {
+    return {
+        name: filepath.split('/').pop(),
+        data: open(filepath, 'b')
+    };
+});
+
 const ALGORITHM = __ENV.ALG || ""
 
 export default function () {
+    const randomImg = imageFiles[Math.floor(Math.random() * imageFiles.length)];
+    
     const data = {
-        file: http.file(file)
+        file: http.file(randomImg.data, randomImg.name)
     };
 
     const res = http.post("http://localhost:8080/"+ALGORITHM, data)
