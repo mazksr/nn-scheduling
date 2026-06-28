@@ -69,7 +69,7 @@ export default function () {
         file: http.file(randomImg.data, randomImg.name)
     };
 
-    const res = http.post("http://localhost:8080/infer"+ALGORITHM, data)
+    const res = http.post("http://localhost:8080/"+ALGORITHM, data)
 
     const workerId = res.headers['X-Worker-Id'] || res.headers['x-worker-id'] || 'unknown';
     const counter = workerCounters[workerId] || workerCounters['unknown'];
