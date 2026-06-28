@@ -37,7 +37,7 @@ func isNetworkOrDialError(err error) bool {
 // makeInference forwards the incoming request to the given worker URL using
 // the shared HTTP client (connection pooling, keep-alives enabled).
 func (cfg *apiConfig) makeInference(r *http.Request, url string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(r.Context(), r.Method, url, r.Body)
+	req, err := http.NewRequestWithContext(r.Context(), r.Method, url+"/infer", r.Body)
 	if err != nil {
 		return nil, err
 	}
