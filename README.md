@@ -110,13 +110,15 @@ Build the image classifier client container (which bundles both the FastAPI serv
 # Build from repository root
 docker build -t img-classifier-client -f img-classifier/Dockerfile .
 
-# Start the container
-docker run -d \
+# Start the container (Requires NVIDIA Container Toolkit on the host)
+docker run -d --gpus all \
   -p 8000:8000 \
   -e SCHEDULER_URL=http://<scheduler-ip>:8080 \
   -e REGISTRATION_SECRET=change-me-before-deploying \
   img-classifier-client
 ```
+
+*Note: The `--gpus all` flag is required for PyTorch to detect and use the host's GPU. Without it, or without the NVIDIA Container Toolkit installed on the host, inference will automatically fall back to the CPU.*
 
 ---
 
