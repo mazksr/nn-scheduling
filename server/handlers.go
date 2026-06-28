@@ -58,6 +58,32 @@ func (cfg *apiConfig) leastConnHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+func (cfg *apiConfig) p2cHandler(w http.ResponseWriter, r *http.Request) {
+	wk, err := cfg.getPowerOfTwoChoices()
+	if err != nil {
+		http.Error(w, "No workers available", http.StatusServiceUnavailable)
+		return
+	}
+
+	// Increment before the request; decrement when handler exits.
+	wk.connCount.Add(1)
+	defer wk.connCount.Add(-1)
+
+	w.Header().Set("X-Worker-Id", cfg.getWorkerID(wk.url))
+
+	res, err := cfg.makeInference(r, wk.url)
+	if err != nil {
+		log.Printf("p2cHandler: inference error: %v\n", err)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	defer res.Body.Close()
+
+	if err = sendResult(w, res); err != nil {
+		log.Printf("p2cHandler: sendResult error: %v\n", err)
+	}
+}
+
 func (cfg *apiConfig) inferenceRegHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Header.Get("X-Registration-Secret") != cfg.registrationSecret {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)

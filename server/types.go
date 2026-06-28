@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"sync"
 	"sync/atomic"
@@ -99,6 +100,33 @@ func (cfg *apiConfig) getRoundRobin() (*worker, error) {
 	// The counter wraps naturally at 2^64; harmless in practice.
 	i := cfg.roundRobinWorker.Add(1) - 1
 	return cfg.workers[int(i%uint64(len(cfg.workers)))], nil
+}
+
+func (cfg *apiConfig) getPowerOfTwoChoices() (*worker, error) {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+
+	n := len(cfg.workers)
+	if n == 0 {
+		return nil, errors.New("no workers available")
+	}
+	if n == 1 {
+		return cfg.workers[0], nil
+	}
+
+	i := rand.Intn(n)
+	j := rand.Intn(n - 1)
+	if j >= i {
+		j++
+	}
+
+	w1 := cfg.workers[i]
+	w2 := cfg.workers[j]
+
+	if w1.connCount.Load() <= w2.connCount.Load() {
+		return w1, nil
+	}
+	return w2, nil
 }
 
 // startHealthChecks spawns a background goroutine that pings every registered
