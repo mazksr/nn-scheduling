@@ -64,12 +64,12 @@ const ALGORITHM = __ENV.ALG || ""
 
 export default function () {
     const randomImg = imageFiles[Math.floor(Math.random() * imageFiles.length)];
-    
+
     const data = {
         file: http.file(randomImg.data, randomImg.name)
     };
 
-    const res = http.post("http://localhost:8080/"+ALGORITHM, data)
+    const res = http.post("http://localhost:8080/infer"+ALGORITHM, data)
 
     const workerId = res.headers['X-Worker-Id'] || res.headers['x-worker-id'] || 'unknown';
     const counter = workerCounters[workerId] || workerCounters['unknown'];
