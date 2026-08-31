@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Algorithms to test
-algorithms=( "infer-rr" "infer-leastconn" "infer-p2c" )
+algorithms=( "infer-rr" "infer-leastconn" "infer-p2c" "infer-hybrid" )
 
 # Optional: directory for CSV outputs (created if missing)
 out_dir="./k6_csv/$(date +%Y-%m-%d_%H-%M-%S)"

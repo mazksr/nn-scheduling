@@ -2,9 +2,11 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
+	"time"
 )
 
 func (cfg *apiConfig) singleWorkerHandler(w http.ResponseWriter, r *http.Request) {
@@ -118,4 +120,56 @@ func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (cfg *apiConfig) hybridPayloadHandler(w http.ResponseWriter, r *http.Request) {
+	payloadSizeMB := float64(r.ContentLength) / (1024.0 * 1024.0)
+	if payloadSizeMB <= 0 {
+		payloadSizeMB = 1.0 // fallback
+	}
+
+	wk, expectedLoad, err := cfg.getHybridPayloadWorker(payloadSizeMB)
+	if err != nil {
+		http.Error(w, "No workers available", http.StatusServiceUnavailable)
+		return
+	}
+
+	wk.connCount.Add(1)
+	defer wk.connCount.Add(-1)
+
+	workerID := cfg.getWorkerID(wk.url)
+	w.Header().Set("X-Worker-Id", workerID)
+
+	startTime := time.Now()
+	res, err := cfg.makeInference(r, wk.url)
+	
+	actualDurationMs := float64(time.Since(startTime).Milliseconds())
+
+	// Beta: static GPU time
+	beta := 8.0
+
+	wk.mu.Lock()
+	wk.currentWeight -= expectedLoad
+	
+	// The Negative Alpha Trap Guardrail: Only update alpha on successful responses
+	// and when actual processing time exceeds static GPU time.
+	if err == nil && res != nil && res.StatusCode == http.StatusOK {
+		if actualDurationMs > beta {
+			alphaMeasured := (actualDurationMs - beta) / payloadSizeMB
+			wk.alpha = (0.8 * wk.alpha) + (0.2 * alphaMeasured)
+			fmt.Printf("Worker %s new Alpha: %.2f\n", workerID, wk.alpha)
+		}
+	}
+	wk.mu.Unlock()
+
+	if err != nil {
+		log.Printf("hybridPayloadHandler: inference error: %v\n", err)
+		http.Error(w, "", http.StatusInternalServerError)
+		return
+	}
+	defer res.Body.Close()
+
+	if err = sendResult(w, res); err != nil {
+		log.Printf("hybridPayloadHandler: sendResult error: %v\n", err)
+	}
 }

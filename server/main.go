@@ -17,6 +17,7 @@ func main() {
 	mux.HandleFunc("POST /infer-single", cfg.singleWorkerHandler)
 	mux.HandleFunc("POST /infer-leastconn", cfg.leastConnHandler)
 	mux.HandleFunc("POST /infer-p2c", cfg.p2cHandler)
+	mux.HandleFunc("POST /infer-hybrid", cfg.hybridPayloadHandler)
 	mux.HandleFunc("POST /reg-worker", cfg.inferenceRegHandler)
 	mux.HandleFunc("GET /health", healthHandler)
 

@@ -24,9 +24,12 @@ type apiConfig struct {
 // Stored as a pointer so that in-flight requests can safely hold a reference
 // even after the worker has been evicted from the pool.
 type worker struct {
-	url       string
-	connCount atomic.Int32
-	evicted   chan struct{}
+	url           string
+	connCount     atomic.Int32
+	evicted       chan struct{}
+	alpha         float64      // The dynamic CPU processing coefficient
+	currentWeight float64      // Wi: The current expected queue load
+	mu            sync.RWMutex // Prevents data races during concurrent traffic
 }
 
 func (cfg *apiConfig) registerWorker(addr string) *worker {
@@ -40,7 +43,12 @@ func (cfg *apiConfig) registerWorker(addr string) *worker {
 		}
 	}
 
-	w := &worker{url: url, evicted: make(chan struct{})}
+	w := &worker{
+		url:           url,
+		evicted:       make(chan struct{}),
+		alpha:         25.5, // Initialized with profiled alpha
+		currentWeight: 0.0,
+	}
 	cfg.workers = append(cfg.workers, w)
 	return w
 }
@@ -155,3 +163,39 @@ func (cfg *apiConfig) startHealthChecks(interval time.Duration) {
 		}
 	}()
 }
+
+func (cfg *apiConfig) getHybridPayloadWorker(payloadSizeMB float64) (*worker, float64, error) {
+	cfg.mu.RLock()
+	defer cfg.mu.RUnlock()
+
+	if len(cfg.workers) == 0 {
+		return nil, 0, errors.New("no workers available")
+	}
+
+	var bestWorker *worker
+	var minSi float64
+	var expectedLoad float64
+
+	for i, w := range cfg.workers {
+		w.mu.RLock()
+		alpha := w.alpha
+		weight := w.currentWeight
+		w.mu.RUnlock()
+
+		load := alpha * payloadSizeMB
+		si := weight + load
+
+		if i == 0 || si < minSi {
+			bestWorker = w
+			minSi = si
+			expectedLoad = load
+		}
+	}
+
+	bestWorker.mu.Lock()
+	bestWorker.currentWeight += expectedLoad
+	bestWorker.mu.Unlock()
+
+	return bestWorker, expectedLoad, nil
+}
+
