@@ -1,6 +1,7 @@
 import http from 'k6/http'
 import { Counter } from 'k6/metrics'
 import { htmlReport } from 'https://raw.githubusercontent.com/benc-uk/k6-reporter/latest/dist/bundle.js'
+import { SharedArray } from 'k6/data'
 
 export const options = {
     thresholds: {
@@ -50,14 +51,17 @@ const workerCounters: { [key: string]: Counter } = {
     'unknown': new Counter('worker_unknown_requests'),
 }
 
-const imageListText = open('./images.txt');
-const imagePaths = imageListText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+// ✅ GOOD: Loads into memory once and shares across all VUs
+const imageFiles = new SharedArray('image files', function () {
+    const imageListText = open('./images.txt');
+    const imagePaths = imageListText.split('\n').map(s => s.trim()).filter(s => s.length > 0);
 
-const imageFiles = imagePaths.map(filepath => {
-    return {
-        name: filepath.split('/').pop(),
-        data: open(filepath, 'b')
-    };
+    return imagePaths.map(filepath => {
+        return {
+            name: filepath.split('/').pop(),
+            data: open(filepath, 'b') // open() must be called inside this function
+        };
+    });
 });
 
 const ALGORITHM = __ENV.ALG || ""
