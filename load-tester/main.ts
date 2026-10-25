@@ -11,32 +11,44 @@ export const options = {
     summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)', 'p(99.99)', 'count'],
 
     scenarios: {
-        contacts: {
-            executor: 'ramping-arrival-rate',
+            contacts: {
+                executor: 'ramping-arrival-rate',
+                startRate: 2, // Start gently to let your Go proxy boot up
+                timeUnit: '1s',
 
-            // Start iterations per `timeUnit`
-            startRate: 20,
+                // Little's Law Calculation:
+                // Peak RPS is 30. If under heavy load, an image takes max 4 seconds.
+                // 30 RPS * 4 seconds = 120 VUs needed to hold connections open.
+                preAllocatedVUs: 20,
+                maxVUs: 150, // Safe ceiling that won't eat all your testing machine's RAM
 
-            // Start `startRate` iterations per minute
-            timeUnit: '1s',
+                stages: [
+                    // Stage 1: Warmup & Calibration (30 seconds)
+                    // Allows your proxy's Exponential Moving Average (EMA) to adjust
+                    // the initial bootstrapped alpha to the actual hardware reality.
+                    { target: 10, duration: '30s' },
 
-            // Pre-allocate necessary VUs.
-            preAllocatedVUs: 100,
-            maxVUs: 600,
+                    // Stage 2: Sustained Load (1 minute)
+                    // Tests the baseline stability of the system.
+                    { target: 24, duration: '1m' },
 
-            stages: [
-                { target: 50, duration: '30s' },
+                    // Stage 3: The "Thundering Herd" Burst (30 seconds)
+                    // THIS IS YOUR THESIS MONEY-MAKER.
+                    // Pushes the system past its comfort zone. Round Robin and
+                    // Least Connections will choke here. Payload-Aware should survive.
+                    { target: 60, duration: '30s' },
 
-                { target: 200, duration: '30s' },
-                { target: 200, duration: '60s' },
+                    // Stage 4: Sustained High Load (30 seconds)
+                    // Keeps the pressure on to see if the CPU bottlenecks compound.
+                    { target: 60, duration: '30s' },
 
-                { target: 500, duration: '30s' },
-                { target: 500, duration: '90s' },
-
-                { target: 30, duration: '1m' },
-            ],
+                    // Stage 5: Cooldown / Recovery (30 seconds)
+                    // Drops traffic back down to see how fast the W_i queues drain
+                    // and return to normal latency.
+                    { target: 10, duration: '30s' },
+                ],
+            },
         },
-    },
 }
 
 const workerCounters: { [key: string]: Counter } = {
