@@ -25,7 +25,7 @@ sequenceDiagram
 
     %% Request/Inference Flow
     Note over Client, Worker: 3. Benchmark Run
-    Client->>LB: POST /infer-rr or /infer-leastconn
+    Client->>LB: POST /infer-rr, /infer-leastconn, /infer-p2c, or /infer-hybrid
     LB->>Worker: Forward Inference Request
     Worker-->>LB: Return Inference Result (ImageNet class)
     LB-->>Client: Forward response + X-Worker-Id Header
@@ -33,10 +33,15 @@ sequenceDiagram
 
 ### Core Components
 
-1. **Go Load Balancer (`/server`)**: A lightweight reverse proxy serving as the entrypoint (port `8080`). It routes inference traffic based on scheduling algorithms like **Round Robin**, **Least Connections**, **Power of Two Choices (P2C)**, and **Hybrid Payload-Aware**, and dynamically evicts workers that fail during execution or regular health checks.
+1. **Go Load Balancer (`/server`)**: A lightweight reverse proxy serving as the entrypoint (port `8080`). It routes inference traffic across four scheduling endpoints:
+   - `POST /infer-rr`: **Round Robin (RR)**
+   - `POST /infer-leastconn`: **Least Connections (LC)**
+   - `POST /infer-p2c`: **Power of Two Choices (P2C)**
+   - `POST /infer-hybrid`: **Hybrid Payload-Aware** (dynamically estimates worker queue load $W_i$ and updates each worker's CPU processing coefficient $\alpha$ via an Exponential Moving Average)
+   *(Also exposes `POST /infer-single` for single-worker baseline testing).* It dynamically evicts workers that fail during execution or regular health checks.
 2. **Go Discovery Agent (`/img-classifier/discovery`)**: Runs alongside each model container. It registers the worker with the Go proxy and keeps it in the active pool.
 3. **FastAPI ViT Worker (`/img-classifier`)**: Python worker exposing a Vision Transformer (`vit-base-patch16-224`) model for ImageNet classification.
-4. **K6 Load Tester (`/load-tester`)**: A script simulating concurrent virtual users generating image classification load. It records Time-to-First-Byte (`http_req_waiting`), request success rates, and individual worker load metrics.
+4. **K6 Load Tester (`/load-tester`)**: A script simulating concurrent virtual users generating image classification load. It records Time-to-First-Byte (`http_req_waiting`), request duration (`http_req_duration`), request success rates, and individual worker load metrics (`worker_1`, `worker_2`, `worker_3`).
 
 ---
 
@@ -56,7 +61,7 @@ Ensure you have the following installed on your machine:
 At the root of the project, edit the `.env` file to customize settings:
 ```ini
 WORKER_URL=http://localhost
-NUM_WORKERS=4
+NUM_WORKERS=3
 WORKERS_PORT=8000
 REGISTRATION_SECRET=change-me-before-deploying
 ```
@@ -128,15 +133,18 @@ As it runs, k6 will export results to a local CSV file inside `load-tester/k6_cs
 
 ### Step 2: Analyze and Visualize Performance
 
-Use the visualizer script to parse the k6 output CSV and generate graphs showing RPS, error rates, and worker traffic distribution:
+Use the analysis and visualizer scripts to parse the k6 output CSVs and generate summary tables and graphs comparing **Round Robin (`/infer-rr`)**, **Least Connections (`/infer-leastconn`)**, **Power of Two Choices (`/infer-p2c`)**, and **Hybrid Payload-Aware (`/infer-hybrid`)**:
 ```bash
 # Install visualization dependencies
 uv pip install matplotlib pandas numpy
 
-# Run visualizer
+# Run comparative thesis analysis across all 4 algorithms
+python analyze_results.py /path/to/k6_csv/your_test_run_dir
+
+# Or run single-CSV visualizer
 python csv-visualizer.py /path/to/k6_csv/your_test_run.csv
 ```
 This produces three critical plots:
-1. **Throughput (RPS)** over time.
-2. **Tail Latency** (`http_req_waiting` average, p95, p99, and max) and failed requests.
-3. **Traffic Distribution** showing how requests were routed to each worker (proves Round Robin's overlapping lines vs. Least Connection's staggered load lines).
+1. **QoS / Throughput & Latency Comparison** across the load stages.
+2. **Tail Latency** (`http_req_duration` / `http_req_waiting` average, p50, p95, p99, and max) and failed requests.
+3. **Traffic Distribution** showing how requests were routed across the 3 worker nodes (`worker_1`, `worker_2`, `worker_3`).
