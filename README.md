@@ -1,6 +1,6 @@
 # Neural Network Inference Load Balancer & Scheduler
 
-This repository contains a dynamic, discovery-based load-balancing and scheduling system designed for hosting and evaluating machine learning inference workloads. The architecture routes requests across multiple worker nodes (e.g., Vision Transformers and Large Language Models) and evaluates system performance using real-time metrics.
+This repository contains a dynamic, discovery-based load-balancing and scheduling system designed for hosting and evaluating machine learning inference workloads. The architecture routes requests across multiple worker nodes (e.g., Vision Transformers) and evaluates system performance.
 
 ---
 
@@ -10,9 +10,8 @@ This repository contains a dynamic, discovery-based load-balancing and schedulin
 sequenceDiagram
     participant Client as K6 Load Generator
     participant LB as Go Load Balancer (8080)
-    participant Worker as Inference Worker (FastAPI / vLLM)
+    participant Worker as Inference Worker (FastAPI)
     participant Agent as Go Discovery Agent
-    participant Prom as Prometheus (9090)
 
     %% Registration Flow
     Note over LB, Agent: 1. Registration Phase
@@ -28,22 +27,16 @@ sequenceDiagram
     Note over Client, Worker: 3. Benchmark Run
     Client->>LB: POST /infer-rr or /infer-leastconn
     LB->>Worker: Forward Inference Request
-    Worker-->>LB: Return Inference Result (ImageNet class / LLM token)
+    Worker-->>LB: Return Inference Result (ImageNet class)
     LB-->>Client: Forward response + X-Worker-Id Header
-    
-    %% Real-time Metrics Stream
-    Note over Client, Prom: 4. Telemetry Logging
-    Client->>Prom: Push metrics via Prometheus Remote Write
 ```
 
 ### Core Components
 
-1. **Go Load Balancer (`/server`)**: A lightweight reverse proxy serving as the entrypoint (port `8080`). It routes inference traffic based on scheduling algorithms like **Round Robin** and **Least Connections**, and dynamically evicts workers that fail during execution or regular health checks.
-2. **Go Discovery Agent (`/discovery`)**: Runs alongside each model container. It registers the worker with the Go proxy and keeps it in the active pool.
+1. **Go Load Balancer (`/server`)**: A lightweight reverse proxy serving as the entrypoint (port `8080`). It routes inference traffic based on scheduling algorithms like **Round Robin**, **Least Connections**, **Power of Two Choices (P2C)**, and **Hybrid Payload-Aware**, and dynamically evicts workers that fail during execution or regular health checks.
+2. **Go Discovery Agent (`/img-classifier/discovery`)**: Runs alongside each model container. It registers the worker with the Go proxy and keeps it in the active pool.
 3. **FastAPI ViT Worker (`/img-classifier`)**: Python worker exposing a Vision Transformer (`vit-base-patch16-224`) model for ImageNet classification.
-4. **vLLM OpenAI Server (`/vllm-server`)**: Dockerized LLM server running `unsloth/Qwen3-1.7B-unsloth-bnb-4bit` configured with the Go discovery agent.
-5. **K6 Load Tester (`/load-tester`)**: A script simulating concurrent virtual users generating image classification load. It records Time-to-First-Byte (`http_req_waiting`), request success rates, and individual worker load metrics.
-6. **Prometheus Monitoring (`/prometheus`)**: Dockerized monitoring stack that collects load-testing telemetry in real time.
+4. **K6 Load Tester (`/load-tester`)**: A script simulating concurrent virtual users generating image classification load. It records Time-to-First-Byte (`http_req_waiting`), request success rates, and individual worker load metrics.
 
 ---
 
@@ -52,8 +45,8 @@ sequenceDiagram
 Ensure you have the following installed on your machine:
 * **Go** (v1.23+)
 * **Python 3.13+** (preferably with [uv](https://github.com/astral-sh/uv) installed)
-* **Docker** & **Docker Compose**
-* **k6** (v0.40.0+ for Prometheus output)
+* **Docker**
+* **k6**
 
 ---
 
@@ -122,28 +115,19 @@ docker run -d --gpus all \
 
 ---
 
-## 📊 Monitoring & Performance Benchmarking
+## 📊 Performance Benchmarking
 
-### Step 1: Spin Up the Database Stack
-Start the Prometheus database and Grafana visualization platform:
-```bash
-# Run from repository root
-docker compose up -d
-```
-Prometheus will start on port `9090` and Grafana on port `3000` (default login: `admin` / `admin`).
-
-### Step 2: Run the Benchmarks
-Start the automated load test suite. The script runs benchmarks for both the **Round Robin** (`infer-rr`) and **Least Connections** (`infer-leastconn`) configurations:
+### Step 1: Run the Benchmarks
+Start the automated load test suite. The script runs benchmarks across the configured load-balancing algorithms (`infer-rr`, `infer-leastconn`, `infer-p2c`, `infer-hybrid`):
 ```bash
 cd load-tester
 chmod +x test-all.sh
 ./test-all.sh
 ```
-As it runs, k6 will export results to a local CSV file inside `load-tester/k6_csv/` and stream real-time metrics directly to the Prometheus database.
+As it runs, k6 will export results to a local CSV file inside `load-tester/k6_csv/`.
 
-### Step 3: Analyze and Visualize Performance
+### Step 2: Analyze and Visualize Performance
 
-#### A. Generate Static Plots (Python)
 Use the visualizer script to parse the k6 output CSV and generate graphs showing RPS, error rates, and worker traffic distribution:
 ```bash
 # Install visualization dependencies
@@ -156,8 +140,3 @@ This produces three critical plots:
 1. **Throughput (RPS)** over time.
 2. **Tail Latency** (`http_req_waiting` average, p95, p99, and max) and failed requests.
 3. **Traffic Distribution** showing how requests were routed to each worker (proves Round Robin's overlapping lines vs. Least Connection's staggered load lines).
-
-#### B. Explore via Grafana
-1. Navigate to Grafana at `http://localhost:3000`.
-2. Add a new **Prometheus** Data Source targeting `http://prometheus:9090`.
-3. Query metrics like `k6_http_req_waiting` and `k6_worker_1_requests` to inspect your scheduler's behavior in real time.

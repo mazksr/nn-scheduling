@@ -78,12 +78,6 @@ Thumbs.db
 *.tmp
 
 # ===== Custom for this repo =====
-# compiled vLLM versions or downloaded models
-/vllm/=*
-/vllm/models/
-/vllm/checkpoints/
-/vllm/cache/
-
 # Docker and runtime
 *.env
 *.dockerfile
