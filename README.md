@@ -8,27 +8,32 @@ This repository contains a dynamic, discovery-based load-balancing and schedulin
 
 ```mermaid
 sequenceDiagram
-    participant Client as K6 Load Generator
-    participant LB as Go Load Balancer (8080)
-    participant Worker as Inference Worker (FastAPI)
-    participant Agent as Go Discovery Agent
+    autonumber
+    participant Client as Grafana k6 (Tester)
+    participant LB as Go Reverse Proxy (:8080)
+    participant Agent as Go Discovery Client (Worker)
+    participant Worker as FastAPI + ViT (:8000)
 
-    %% Registration Flow
-    Note over LB, Agent: 1. Registration Phase
-    Agent->>LB: POST /reg-worker (Register Worker IP/Port)
-    LB-->>Agent: 200 OK (Registration Confirmed)
-    
-    %% Health Check Flow
-    Note over LB, Worker: 2. Periodic Health Checks
-    LB->>Worker: GET /health (Every 15 seconds)
-    Worker-->>LB: 200 OK (Active Status)
+    Note over LB, Agent: 1. Dynamic Registration & Stream Holding
+    Agent->>LB: POST /reg-worker (Header: X-Registration-Secret)
+    LB-->>Agent: 200 OK + Flush(" ") [Chunked Stream Held Open]
+    Note right of Agent: Blocks on io.ReadAll(resp.Body)
 
-    %% Request/Inference Flow
-    Note over Client, Worker: 3. Benchmark Run
-    Client->>LB: POST /infer-rr, /infer-leastconn, /infer-p2c, or /infer-hybrid
-    LB->>Worker: Forward Inference Request
-    Worker-->>LB: Return Inference Result (ImageNet class)
-    LB-->>Client: Forward response + X-Worker-Id Header
+    Note over LB, Worker: 2. Periodic Active Health Checks (Every 15s)
+    loop Every 15 Seconds
+        LB->>Worker: GET /health
+        Worker-->>LB: 200 OK (Healthy)
+    end
+    Note over LB, Agent: If /health fails -> close(wk.evicted) drops stream & triggers 5s retry
+
+    Note over Client, Worker: 3. Payload-Aware Inference Routing
+    Client->>LB: POST /infer-{rr|leastconn|p2c|hybrid} (Image 50KB-10MB)
+    Note right of LB: Read Content-Length (P_new)<br/>Select min S_i = W_i + (α × P_new)
+    LB->>Worker: Forward Multipart Image Stream
+    Note right of Worker: CPU: Pillow Decode & Resize (224x224)<br/>GPU: RTX 4060 Ti ViT Forward Pass
+    Worker-->>LB: 200 OK (Prediction JSON + X-Worker-Id)
+    Note right of LB: Decrement W_i & Update α via EMA
+    LB-->>Client: Forward Response (X-Worker-Id)
 ```
 
 ### Core Components
