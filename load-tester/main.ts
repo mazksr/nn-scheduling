@@ -33,8 +33,7 @@ export const options = {
                     { target: 24, duration: '1m' },
 
                     // Stage 3: The "Thundering Herd" Burst (30 seconds)
-                    // THIS IS YOUR THESIS MONEY-MAKER.
-                    // Pushes the system past its comfort zone. Round Robin and
+                    // Pushes the system past its saturation point.
                     // Least Connections will choke here. Payload-Aware should survive.
                     { target: 60, duration: '30s' },
 
